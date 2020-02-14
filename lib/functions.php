@@ -122,6 +122,25 @@ function getStdin(): ResourceInputStream
 }
 
 /**
+ * Get LineReader instance associated with STDIN.
+ *
+ * @return LineReader
+ */
+function getStdinLineReader(): LineReader
+{
+    static $key = LineReader::class . '\\stdin';
+
+    $stream = Loop::getState($key);
+
+    if (!$stream) {
+        $stream = new LineReader(getStdin());
+        Loop::setState($key, $stream);
+    }
+
+    return $stream;
+}
+
+/**
  * The STDOUT stream for the process associated with the currently active event loop.
  *
  * @return ResourceOutputStream
@@ -159,6 +178,37 @@ function getStderr(): ResourceOutputStream
     return $stream;
 }
 
+/**
+ * Buffered async version of the readline() function.
+ *
+ * Please note that this function will hungrily eat data from stdin,
+ * buffering data even after the first newline.
+ * Use getStdinLineReader()->getBuffer() to obtain the remaining buffered data.
+ *
+ * @param string $prompt Optional prompt to print to console
+ *
+ * @return \Amp\Promise Will resolve with the read line
+ */
+function prompt(string $prompt = ''): Promise
+{
+    return call(static function () use ($prompt) {
+        if ($prompt) {
+            yield getStdout()->write($prompt);
+        }
+        return getStdinLineReader()->readLine();
+    });
+}
+
+/**
+ * Simple wrapper function to asynchronously write a string to the PHP output buffer.
+ *
+ * @param string $string
+ * @return Promise
+ */
+function bufferEcho($string): Promise
+{
+    return getOutputBufferStream()->write($string);
+}
 function parseLineDelimitedJson(InputStream $stream, bool $assoc = false, int $depth = 512, int $options = 0): Iterator
 {
     return new Producer(static function (callable $emit) use ($stream, $assoc, $depth, $options) {
